@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 
 # =========================
 # CONFIG
@@ -10,51 +11,8 @@ st.set_page_config(
     layout="centered"
 )
 
-# -------------------------
-# ESTILOS CSS FLUORESCENTES
-# -------------------------
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #0f0f0f;
-        color: #00ffea;
-        font-family: 'Arial', sans-serif;
-    }
-    .stButton>button {
-        background-color: #ff00ff;
-        color: #ffffff;
-        font-size: 18px;
-        border-radius: 12px;
-        padding: 8px 16px;
-    }
-    .stTextArea textarea {
-        background-color: #111111;
-        color: #00ffea;
-        border: 2px solid #ff00ff;
-        border-radius: 8px;
-        font-size: 16px;
-    }
-    .stSelectbox select {
-        background-color: #111111;
-        color: #00ffea;
-        border: 2px solid #ff00ff;
-        border-radius: 8px;
-        font-size: 16px;
-    }
-    hr {
-        border: 1px solid #ff00ff;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# =========================
-# TÍTULO
-# =========================
 st.title("🗣️ AAC Universal con Traducción IA Local")
-st.subheader("💡 Funciona desde PC, Android y iOS vía navegador")
+st.write("Funciona desde PC, Android y iOS vía navegador.")
 
 # =========================
 # IDIOMAS
@@ -117,7 +75,7 @@ if st.button("🔊 Traducir y hablar"):
                 LANGUAGES[target_lang]
             )
 
-            st.success("✅ Texto traducido:")
+            st.success("Texto traducido:")
             st.text_area("Resultado:", translated_text, height=100)
 
             # =========================
@@ -126,9 +84,12 @@ if st.button("🔊 Traducir y hablar"):
             st.components.v1.html(
                 f"""
                 <script>
-                const text = `{translated_text}`;
+                const text = {translated_text};
                 const msg = new SpeechSynthesisUtterance(text);
+
+                // Detectar idioma automáticamente
                 msg.lang = navigator.language || "en-US";
+
                 window.speechSynthesis.cancel();
                 window.speechSynthesis.speak(msg);
                 </script>
@@ -137,13 +98,13 @@ if st.button("🔊 Traducir y hablar"):
             )
 
         except Exception as e:
-            st.error("❌ Error al traducir con IA local")
+            st.error("Error al traducir con IA local")
             st.info(str(e))
 
 # =========================
 # FOOTER
 # =========================
-st.markdown("<hr>", unsafe_allow_html=True)
+st.markdown("---")
 st.caption(
     "AAC Universal · Traducción IA local con Ollama · "
     "Voz nativa del dispositivo · Multiplataforma"
