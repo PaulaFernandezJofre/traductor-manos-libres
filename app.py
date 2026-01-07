@@ -64,7 +64,7 @@ def ollama_translate(text, source, target):
 # =========================
 # BOTÓN
 # =========================
-if st.button("🔊 Traducir y hablar"):
+if st.button("🔊 Traducir"):
     if not text.strip():
         st.warning("Escribe un mensaje primero")
     else:
