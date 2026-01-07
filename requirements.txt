@@ -1,3 +1,12 @@
 streamlit==1.30.0
 
 requests==2.31.0
+gTTS==2.4.0
+
+# Opcional para voz offline en PC
+pyttsx3==2.90
+SpeechRecognition==3.11.0
+pocketsphinx==0.1.15
+
+# PyAudio (Windows: instalar wheel manualmente)
+# PyAudio==0.2.13

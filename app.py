@@ -1,33 +1,37 @@
 import streamlit as st
 import requests
+from gtts import gTTS
+import base64
+import tempfile
+import os
 import json
 
 # =========================
 # CONFIG
 # =========================
 st.set_page_config(
-    page_title="AAC Universal + IA Local",
+    page_title="AAC Universal Web Híbrido",
     page_icon="🗣️",
     layout="centered"
 )
 
-st.title("🗣️ AAC Universal con Traducción IA Local")
-st.write("Funciona desde PC, Android y iOS vía navegador.")
+st.title("🗣️ AAC Universal Web · Híbrido")
+st.write("Funciona en PC, Android y iOS vía navegador, con voz adaptativa.")
 
 # =========================
 # IDIOMAS
 # =========================
 LANGUAGES = {
-    "Español": "Spanish",
-    "English": "English",
-    "Français": "French",
-    "Deutsch": "German",
-    "Italiano": "Italian",
-    "Português": "Portuguese",
-    "中文": "Chinese",
-    "日本語": "Japanese",
-    "한국어": "Korean",
-    "العربية": "Arabic"
+    "Español": "es",
+    "English": "en",
+    "Français": "fr",
+    "Deutsch": "de",
+    "Italiano": "it",
+    "Português": "pt",
+    "中文": "zh",
+    "日本語": "ja",
+    "한국어": "ko",
+    "العربية": "ar"
 }
 
 # =========================
@@ -45,68 +49,112 @@ def ollama_translate(text, source, target):
         f"Translate the following text from {source} to {target}. "
         f"Only return the translated text.\n\n{text}"
     )
-
-    r = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "llama3.1:8b",
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=60
-    )
-
-    if r.status_code != 200:
-        raise Exception("Ollama no disponible")
-
-    return r.json()["response"].strip()
+    try:
+        r = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "llama3.1:8b",
+                "prompt": prompt,
+                "stream": False
+            },
+            timeout=60
+        )
+        r.raise_for_status()
+        return r.json().get("response", "").strip()
+    except Exception as e:
+        st.warning(f"No se pudo usar Ollama: {e}")
+        return text  # Devuelve el texto original si falla
 
 # =========================
-# BOTÓN
+# FUNCIÓN gTTS
+# =========================
+def speak_text(text, lang_code):
+    try:
+        tts = gTTS(text=text, lang=lang_code)
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        tts.save(tmp_file.name)
+
+        with open(tmp_file.name, "rb") as f:
+            audio_bytes = f.read()
+        audio_b64 = base64.b64encode(audio_bytes).decode()
+
+        audio_html = f"""
+        <audio autoplay>
+            <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
+        </audio>
+        """
+        st.components.v1.html(audio_html, height=50)
+    except Exception as e:
+        st.error(f"Error al generar audio con gTTS: {e}")
+    finally:
+        try:
+            os.unlink(tmp_file.name)
+        except:
+            pass
+
+# =========================
+# SESIÓN PARA FALLBACK gTTS
+# =========================
+if "tts_fallback" not in st.session_state:
+    st.session_state["tts_fallback"] = False
+
+# =========================
+# BOTÓN HÍBRIDO
 # =========================
 if st.button("🔊 Traducir"):
     if not text.strip():
         st.warning("Escribe un mensaje primero")
     else:
-        try:
-            translated_text = ollama_translate(
-                text,
-                LANGUAGES[source_lang],
-                LANGUAGES[target_lang]
-            )
+        translated_text = ollama_translate(
+            text,
+            LANGUAGES[source_lang],
+            LANGUAGES[target_lang]
+        )
 
-            st.success("Texto traducido:")
-            st.text_area("Resultado:", translated_text, height=100)
+        st.success("Texto traducido:")
+        st.text_area("Resultado:", translated_text, height=100)
 
-            # =========================
-            # VOZ UNIVERSAL (NAVEGADOR)
-            # =========================
-            st.components.v1.html(
-                f"""
-                <script>
-                const text = {translated_text};
-                const msg = new SpeechSynthesisUtterance(text);
+        # =========================
+        # VOZ HÍBRIDA
+        # =========================
+        st.components.v1.html(
+            f"""
+            <script>
+            function playVoice(text, lang) {{
+                if ('speechSynthesis' in window) {{
+                    const msg = new SpeechSynthesisUtterance(text);
+                    msg.lang = lang;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(msg);
+                }} else {{
+                    fetch(window.location.href, {{
+                        method: "POST",
+                        headers: {{
+                            "Content-Type": "application/json"
+                        }},
+                        body: JSON.stringify({{tts_fallback: true}})
+                    }});
+                }}
+            }}
+            playVoice({json.dumps(translated_text)}, '{LANGUAGES[target_lang]}');
+            </script>
+            """,
+            height=0
+        )
 
-                // Detectar idioma automáticamente
-                msg.lang = navigator.language || "en-US";
-
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(msg);
-                </script>
-                """,
-                height=0
-            )
-
-        except Exception as e:
-            st.error("Error al traducir con IA local")
-            st.info(str(e))
+        # =========================
+        # gTTS fallback
+        # =========================
+        if st.session_state.get("tts_fallback", False):
+            speak_text(translated_text, LANGUAGES[target_lang])
+            st.session_state["tts_fallback"] = False
 
 # =========================
 # FOOTER
 # =========================
 st.markdown("---")
 st.caption(
-    "AAC Universal · Traducción IA local con Ollama · "
-    "Voz nativa del dispositivo · Multiplataforma"
+    "AAC Universal Web · Traducción IA local con Ollama · "
+    "Voz del navegador + gTTS · Híbrido y multiplataforma"
 )
 st.caption("Desarrollado por Paula Fernández Jofré 2026")
