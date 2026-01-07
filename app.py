@@ -1,43 +1,151 @@
 import streamlit as st
-import speech_recognition as sr
-from gtts import gTTS
-import os
-import tempfile
+import requests
 
-st.set_page_config(page_title="Traductor Manos Libres", page_icon="🗣️", layout="centered")
-st.title("🎤 Traductor de Voz")
+# =========================
+# CONFIG
+# =========================
+st.set_page_config(
+    page_title="AAC Universal + IA Local",
+    page_icon="🗣️",
+    layout="centered"
+)
 
-# -------------------------------
-# Subir archivo de audio
-# -------------------------------
-audio_file = st.file_uploader("Sube un archivo de audio (wav o mp3)", type=["wav", "mp3"])
+# -------------------------
+# ESTILOS CSS FLUORESCENTES
+# -------------------------
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #0f0f0f;
+        color: #00ffea;
+        font-family: 'Arial', sans-serif;
+    }
+    .stButton>button {
+        background-color: #ff00ff;
+        color: #ffffff;
+        font-size: 18px;
+        border-radius: 12px;
+        padding: 8px 16px;
+    }
+    .stTextArea textarea {
+        background-color: #111111;
+        color: #00ffea;
+        border: 2px solid #ff00ff;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    .stSelectbox select {
+        background-color: #111111;
+        color: #00ffea;
+        border: 2px solid #ff00ff;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    hr {
+        border: 1px solid #ff00ff;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-if audio_file is not None:
-    st.audio(audio_file, format='audio/wav')
-    
-    # Guardar temporalmente el archivo
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-        tmp_file.write(audio_file.read())
-        tmp_path = tmp_file.name
+# =========================
+# TÍTULO
+# =========================
+st.title("🗣️ AAC Universal con Traducción IA Local")
+st.subheader("💡 Funciona desde PC, Android y iOS vía navegador")
 
-    # Reconocer voz
-    r = sr.Recognizer()
-    with sr.AudioFile(tmp_path) as source:
-        audio_data = r.record(source)
+# =========================
+# IDIOMAS
+# =========================
+LANGUAGES = {
+    "Español": "Spanish",
+    "English": "English",
+    "Français": "French",
+    "Deutsch": "German",
+    "Italiano": "Italian",
+    "Português": "Portuguese",
+    "中文": "Chinese",
+    "日本語": "Japanese",
+    "한국어": "Korean",
+    "العربية": "Arabic"
+}
+
+# =========================
+# UI
+# =========================
+text = st.text_area("✍️ Mensaje:", height=150)
+source_lang = st.selectbox("Idioma original", LANGUAGES.keys(), index=0)
+target_lang = st.selectbox("Idioma de salida", LANGUAGES.keys(), index=1)
+
+# =========================
+# OLLAMA TRANSLATION
+# =========================
+def ollama_translate(text, source, target):
+    prompt = (
+        f"Translate the following text from {source} to {target}. "
+        f"Only return the translated text.\n\n{text}"
+    )
+
+    r = requests.post(
+        "http://localhost:11434/api/generate",
+        json={
+            "model": "llama3.1:8b",
+            "prompt": prompt,
+            "stream": False
+        },
+        timeout=60
+    )
+
+    if r.status_code != 200:
+        raise Exception("Ollama no disponible")
+
+    return r.json()["response"].strip()
+
+# =========================
+# BOTÓN
+# =========================
+if st.button("🔊 Traducir y hablar"):
+    if not text.strip():
+        st.warning("Escribe un mensaje primero")
+    else:
         try:
-            text = r.recognize_google(audio_data, language="es-ES")
-            st.success(f"Texto reconocido: {text}")
-        except sr.UnknownValueError:
-            st.error("No se pudo reconocer el audio")
-        except sr.RequestError as e:
-            st.error(f"Error al comunicarse con el servicio de Google: {e}")
+            translated_text = ollama_translate(
+                text,
+                LANGUAGES[source_lang],
+                LANGUAGES[target_lang]
+            )
 
-    # -------------------------------
-    # Convertir texto a voz
-    # -------------------------------
-    if 'text' in locals():
-        tts = gTTS(text=text, lang='es')
-        tts_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        tts.save(tts_file.name)
-        st.audio(tts_file.name, format="audio/mp3")
-        st.success("¡Traducción a voz generada con éxito!")
+            st.success("✅ Texto traducido:")
+            st.text_area("Resultado:", translated_text, height=100)
+
+            # =========================
+            # VOZ UNIVERSAL (NAVEGADOR)
+            # =========================
+            st.components.v1.html(
+                f"""
+                <script>
+                const text = `{translated_text}`;
+                const msg = new SpeechSynthesisUtterance(text);
+                msg.lang = navigator.language || "en-US";
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(msg);
+                </script>
+                """,
+                height=0
+            )
+
+        except Exception as e:
+            st.error("❌ Error al traducir con IA local")
+            st.info(str(e))
+
+# =========================
+# FOOTER
+# =========================
+st.markdown("<hr>", unsafe_allow_html=True)
+st.caption(
+    "AAC Universal · Traducción IA local con Ollama · "
+    "Voz nativa del dispositivo · Multiplataforma"
+)
+st.caption("Desarrollado por Paula Fernández Jofré 2026")
